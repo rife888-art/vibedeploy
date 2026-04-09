@@ -21,9 +21,9 @@ export function rateLimit(key: string, limit: number, windowMs: number): { succe
 // Clean up old entries every 5 minutes
 setInterval(() => {
   const now = Date.now()
-  for (const [key, entry] of rateMap) {
+  rateMap.forEach((entry, key) => {
     if (now > entry.resetAt) {
       rateMap.delete(key)
     }
-  }
+  })
 }, 5 * 60 * 1000)
