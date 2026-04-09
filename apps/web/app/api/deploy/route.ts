@@ -23,9 +23,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'vercelToken and projectId required' }, { status: 400 })
   }
 
-  // Validate projectId format (alphanumeric, hyphens, underscores)
-  if (!/^[a-zA-Z0-9_-]+$/.test(projectId)) {
+  // Validate projectId format (alphanumeric, hyphens, underscores, max 100 chars)
+  if (!/^[a-zA-Z0-9_-]+$/.test(projectId) || projectId.length > 100) {
     return NextResponse.json({ error: 'Invalid projectId format' }, { status: 400 })
+  }
+
+  // Validate Vercel token format (basic sanity check)
+  if (vercelToken.length < 10 || vercelToken.length > 200) {
+    return NextResponse.json({ error: 'Invalid token format' }, { status: 400 })
+  }
+
+  // Verify token has access to the project before deploying
+  const verifyUrl = teamId && typeof teamId === 'string'
+    ? `https://api.vercel.com/v9/projects/${encodeURIComponent(projectId)}?teamId=${encodeURIComponent(teamId)}`
+    : `https://api.vercel.com/v9/projects/${encodeURIComponent(projectId)}`
+
+  try {
+    const verifyRes = await fetch(verifyUrl, {
+      headers: { Authorization: `Bearer ${vercelToken}` },
+    })
+    if (!verifyRes.ok) {
+      return NextResponse.json({ error: 'Token does not have access to this project' }, { status: 403 })
+    }
+  } catch {
+    return NextResponse.json({ error: 'Failed to verify project access' }, { status: 500 })
   }
 
   const sanitizedTeamId = teamId && typeof teamId === 'string' ? encodeURIComponent(teamId) : null

@@ -12,6 +12,12 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // Validate audit ID format (UUID)
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (!uuidPattern.test(params.id)) {
+    return NextResponse.json({ error: 'Invalid audit ID format' }, { status: 400 })
+  }
+
   const { data: audit } = await supabaseAdmin
     .from('audits')
     .select('*')
@@ -23,11 +29,19 @@ export async function GET(
     return NextResponse.json({ error: 'Audit not found' }, { status: 404 })
   }
 
-  const { data: findings } = await supabaseAdmin
-    .from('audit_findings')
-    .select('*')
-    .eq('audit_id', params.id)
-    .order('severity', { ascending: true })
+  // Only return findings for completed audits
+  let findings: any[] = []
+  if (audit.status === 'done') {
+    const { data } = await supabaseAdmin
+      .from('audit_findings')
+      .select('*')
+      .eq('audit_id', params.id)
+      .order('severity', { ascending: true })
+    findings = data || []
+  }
 
-  return NextResponse.json({ audit, findings: findings || [] })
+  // Strip any internal fields before returning
+  const { user_id, ...safeAudit } = audit
+
+  return NextResponse.json({ audit: safeAudit, findings })
 }

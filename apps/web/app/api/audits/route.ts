@@ -71,6 +71,10 @@ async function fetchRepoFiles(accessToken: string, repoName: string, branch: str
   const codeFiles = tree.tree.filter((item: any) => {
     if (item.type !== 'blob') return false
     if (ignoreDirs.some((dir: string) => item.path.includes(`${dir}/`))) return false
+    // Validate file path: no directory traversal, no absolute paths
+    if (item.path.includes('..') || item.path.startsWith('/') || item.path.includes('\\')) return false
+    // Only allow safe characters in file paths
+    if (!/^[a-zA-Z0-9._\-/]+$/.test(item.path)) return false
     return codeExtensions.some((ext: string) => item.path.endsWith(ext))
   })
 
@@ -142,6 +146,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid repository name format' }, { status: 400 })
   }
 
+  // Verify user has access to the repository before auditing
+  try {
+    const repoCheckRes = await fetch(`https://api.github.com/repos/${repoName}`, {
+      headers: {
+        Authorization: `Bearer ${session.accessToken}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
+    })
+    if (!repoCheckRes.ok) {
+      return NextResponse.json({ error: 'Repository not found or access denied' }, { status: 403 })
+    }
+    const repoData = await repoCheckRes.json()
+    // Only allow repos the user owns or has push access to
+    if (!repoData.permissions?.pull) {
+      return NextResponse.json({ error: 'Insufficient repository permissions' }, { status: 403 })
+    }
+  } catch {
+    return NextResponse.json({ error: 'Failed to verify repository access' }, { status: 500 })
+  }
+
   // Create audit record with "analyzing" status
   const { data: audit, error: insertError } = await supabaseAdmin
     .from('audits')
@@ -159,7 +183,10 @@ export async function POST(req: NextRequest) {
   }
 
   // Run analysis in background (don't await — return immediately)
-  runAudit(audit.id, session.accessToken, repoName, defaultBranch || 'main').catch(console.error)
+  runAudit(audit.id, session.accessToken, repoName, defaultBranch || 'main').catch(() => {
+    // Log audit failure without exposing error details
+    supabaseAdmin.from('audits').update({ status: 'error', summary: 'Unexpected error during analysis' }).eq('id', audit.id)
+  })
 
   return NextResponse.json({ auditId: audit.id })
 }
@@ -233,11 +260,11 @@ async function runAudit(auditId: string, accessToken: string, repoName: string, 
 
       await supabaseAdmin.from('audit_findings').insert(findings)
     }
-  } catch (err: any) {
-    console.error('Audit error:', err)
+  } catch {
+    // Don't log full error to avoid exposing sensitive data in console
     await supabaseAdmin
       .from('audits')
-      .update({ status: 'error', summary: err.message || 'Unexpected error' })
+      .update({ status: 'error', summary: 'An error occurred during analysis. Please try again.' })
       .eq('id', auditId)
   }
 }
