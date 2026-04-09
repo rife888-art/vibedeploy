@@ -8,3 +8,4 @@ build/
 vibedeploy.config.json
 *.log
 .DS_Store
+.claude/settings.local.json

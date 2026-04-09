@@ -2,7 +2,35 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
+import { rateLimit } from '@/lib/rate-limit'
 import crypto from 'crypto'
+
+// Simple encryption for stored settings
+const ENCRYPTION_KEY = process.env.NEXTAUTH_SECRET || 'fallback-key-change-me'
+
+function encrypt(text: string): string {
+  const iv = crypto.randomBytes(16)
+  const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32)
+  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv)
+  let encrypted = cipher.update(text, 'utf8', 'hex')
+  encrypted += cipher.final('hex')
+  return iv.toString('hex') + ':' + encrypted
+}
+
+function decrypt(text: string): string {
+  try {
+    const [ivHex, encrypted] = text.split(':')
+    if (!ivHex || !encrypted) return text // Not encrypted (legacy)
+    const iv = Buffer.from(ivHex, 'hex')
+    const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32)
+    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv)
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8')
+    decrypted += decipher.final('utf8')
+    return decrypted
+  } catch {
+    return text // Return as-is if decryption fails (legacy data)
+  }
+}
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -51,12 +79,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid key' }, { status: 400 })
   }
 
-  // Store encrypted (in production, use a KMS or Vault — this is simplified)
+  // Encrypt sensitive values before storing
+  const encryptedValue = key === 'CLI_TOKEN' ? value : encrypt(value)
+
   const { error } = await supabaseAdmin.from('user_settings').upsert(
     {
       user_id: session.user.id,
       key,
-      value, // encrypt this in production
+      value: encryptedValue,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'user_id,key' }

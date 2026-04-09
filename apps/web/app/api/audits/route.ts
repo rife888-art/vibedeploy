@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
+import { rateLimit } from '@/lib/rate-limit'
 import Anthropic from '@anthropic-ai/sdk'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -58,7 +59,7 @@ async function fetchRepoFiles(accessToken: string, repoName: string, branch: str
   )
 
   if (!treeRes.ok) {
-    throw new Error('Failed to fetch repo tree')
+    throw new Error('Failed to fetch repo tree. Please check the repository exists and is accessible.')
   }
 
   const tree = await treeRes.json()
@@ -117,9 +118,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { repoName, repoUrl, defaultBranch } = await req.json()
-  if (!repoName) {
+  // Rate limit: 5 audits per minute per user
+  const { success: withinLimit } = rateLimit(`audit:${session.user.id}`, 5, 60 * 1000)
+  if (!withinLimit) {
+    return NextResponse.json({ error: 'Rate limit exceeded. Please wait before starting another audit.' }, { status: 429 })
+  }
+
+  let body: any
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
+  const { repoName, repoUrl, defaultBranch } = body
+  if (!repoName || typeof repoName !== 'string') {
     return NextResponse.json({ error: 'repoName is required' }, { status: 400 })
+  }
+
+  // Validate repo name format (owner/repo)
+  const repoPattern = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/
+  if (!repoPattern.test(repoName)) {
+    return NextResponse.json({ error: 'Invalid repository name format' }, { status: 400 })
   }
 
   // Create audit record with "analyzing" status

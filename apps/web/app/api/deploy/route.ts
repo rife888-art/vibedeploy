@@ -11,13 +11,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { vercelToken, projectId, teamId } = await req.json()
-  if (!vercelToken || !projectId) {
+  let body: any
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
+  const { vercelToken, projectId, teamId } = body
+  if (!vercelToken || typeof vercelToken !== 'string' || !projectId || typeof projectId !== 'string') {
     return NextResponse.json({ error: 'vercelToken and projectId required' }, { status: 400 })
   }
 
-  const url = teamId
-    ? `https://api.vercel.com/v13/deployments?teamId=${encodeURIComponent(teamId)}`
+  // Validate projectId format (alphanumeric, hyphens, underscores)
+  if (!/^[a-zA-Z0-9_-]+$/.test(projectId)) {
+    return NextResponse.json({ error: 'Invalid projectId format' }, { status: 400 })
+  }
+
+  const sanitizedTeamId = teamId && typeof teamId === 'string' ? encodeURIComponent(teamId) : null
+  const url = sanitizedTeamId
+    ? `https://api.vercel.com/v13/deployments?teamId=${sanitizedTeamId}`
     : 'https://api.vercel.com/v13/deployments'
 
   const res = await fetch(url, {
@@ -34,8 +47,7 @@ export async function POST(req: NextRequest) {
   })
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Vercel API error' }))
-    return NextResponse.json({ success: false, error: err }, { status: res.status })
+    return NextResponse.json({ success: false, error: 'Deployment failed' }, { status: res.status })
   }
 
   const data = await res.json()

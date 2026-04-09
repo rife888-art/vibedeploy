@@ -47,7 +47,6 @@ export const authOptions: NextAuthOptions = {
           await supabaseAdmin.from('users').insert({
             github_id: account.providerAccountId,
             email: user.email,
-            name: user.name,
             plan: 'free',
           })
         }

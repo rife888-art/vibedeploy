@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: 'VibeDeploy — Ship vibe code without getting burned',
   description:
     'One command checks your repo, fixes critical issues, and deploys to Vercel. Under 5 minutes. Every time.',
-  metadataBase: new URL(process.env.NEXTAUTH_URL || 'http://localhost:3000'),
+  metadataBase: new URL(process.env.NEXTAUTH_URL || 'https://web-seven-delta-81.vercel.app'),
   openGraph: {
     title: 'VibeDeploy — Ship vibe code without getting burned',
     description:

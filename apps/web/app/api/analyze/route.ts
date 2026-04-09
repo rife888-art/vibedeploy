@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { rateLimit } from '@/lib/rate-limit'
 import Anthropic from '@anthropic-ai/sdk'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -29,8 +30,14 @@ Return max 10 issues. Return ONLY valid JSON, no markdown, no explanation.`
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Rate limit: 10 analysis requests per minute per user
+  const { success: withinLimit } = rateLimit(`analyze:${session.user.id}`, 10, 60 * 1000)
+  if (!withinLimit) {
+    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
   }
 
   const { code, repoName } = await req.json()

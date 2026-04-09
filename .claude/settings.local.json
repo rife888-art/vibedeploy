@@ -1,30 +1,5 @@
 {
   "permissions": {
-    "allow": [
-      "Bash(openssl rand:*)",
-      "Bash(supabase --version)",
-      "Bash(psql --version)",
-      "Bash(npm --version)",
-      "Bash(export PATH=\"/opt/homebrew/bin:/usr/local/bin:$PATH\")",
-      "Bash(export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH find /Users/markkrasotin/Downloads/vibedeploy -name package.json -path */supabase-js/package.json)",
-      "Bash(python3 -c \"import psycopg2; print\\(''psycopg2 ok''\\)\")",
-      "Bash(python3 -c \"import urllib.request; print\\(''urllib ok''\\)\")",
-      "Bash(npm install:*)",
-      "Bash(timeout 10 npm run dev)",
-      "mcp__Claude_Preview__preview_start",
-      "Read(//opt/homebrew/Cellar/node/25.9.0_1/bin/**)",
-      "Bash(/opt/homebrew/bin/node --version)",
-      "Bash(chmod +x /Users/markkrasotin/Downloads/vibedeploy/apps/web/start-dev.sh)",
-      "Bash(export PATH=\"/opt/homebrew/bin:$PATH\")",
-      "Bash(npx vercel:*)",
-      "Bash(grep -v \"^$\")",
-      "Bash(while IFS='=' read -r key value)",
-      "Bash(do echo:*)",
-      "Bash(echo \"$value\")",
-      "Bash(done)",
-      "Bash(printf \"Ov23likNB7GA5dj6s0K2\")",
-      "Bash(printf \"77ea9731e9e401fc7cf8b5c9cfe09fdc1792996f\")",
-      "Bash(npm whoami:*)"
-    ]
+    "allow": []
   }
 }
