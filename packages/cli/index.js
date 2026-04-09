@@ -559,18 +559,245 @@ async function reportToDashboard(config, { repoName, issues, fixes, deployUrl })
   }
 }
 
+// ─── Audit flow ───────────────────────────────────────────────────────────────
+
+const AUDIT_SYSTEM_PROMPT = `You are a security auditor for web applications. Analyze this codebase and return a JSON security audit report.
+
+Return ONLY valid JSON in this exact format:
+{
+  "score": <number 0-100>,
+  "grade": "<A|B|C|D|F>",
+  "summary": "<2-3 sentence summary of security posture>",
+  "findings": [
+    {
+      "severity": "critical" | "warning" | "info",
+      "type": "<e.g. hardcoded-secret, no-auth, sql-injection, xss, insecure-config>",
+      "file": "<file path>",
+      "line": <line number or 0>,
+      "description": "<what the issue is>",
+      "fix": "<how to fix it>"
+    }
+  ]
+}
+
+Grading scale:
+- A (90-100): No critical issues, minimal warnings
+- B (70-89): No critical issues, some warnings
+- C (50-69): 1-2 critical issues
+- D (30-49): Multiple critical issues
+- F (0-29): Severe security problems
+
+Focus on:
+1. Hardcoded secrets/API keys in non-.env files
+2. Missing authentication on API routes
+3. SQL injection / NoSQL injection
+4. XSS vulnerabilities
+5. Insecure dependencies or configurations
+6. Missing rate limiting
+7. CORS misconfigurations
+8. Insecure data storage
+
+Return max 15 findings. Return ONLY valid JSON.`
+
+function gradeColor(grade) {
+  const colors = { A: chalk.green, B: chalk.cyan, C: chalk.yellow, D: chalk.hex('#ff8c00'), F: chalk.red }
+  return (colors[grade] || chalk.white)(grade)
+}
+
+function severityIcon(severity) {
+  if (severity === 'critical') return chalk.red('✗')
+  if (severity === 'warning') return chalk.yellow('⚠')
+  return chalk.blue('ℹ')
+}
+
+function severityLabel(severity) {
+  if (severity === 'critical') return chalk.red.bold('CRITICAL')
+  if (severity === 'warning') return chalk.yellow.bold('WARNING')
+  return chalk.blue('INFO')
+}
+
+function scoreBar(score) {
+  const width = 30
+  const filled = Math.round((score / 100) * width)
+  const empty = width - filled
+  const color = score >= 90 ? chalk.green : score >= 70 ? chalk.cyan : score >= 50 ? chalk.yellow : score >= 30 ? chalk.hex('#ff8c00') : chalk.red
+  return color('█'.repeat(filled)) + chalk.dim('░'.repeat(empty)) + chalk.dim(` ${score}/100`)
+}
+
+async function runAudit({ json = false, reportToWeb = false } = {}) {
+  if (!json) header()
+
+  const cwd = process.cwd()
+  const repoName = path.basename(cwd)
+
+  // 1. Config
+  const config = await ensureConfig()
+
+  // 2. Read repo
+  const spinner = ora({ text: chalk.dim('  Scanning repository...'), prefixText: '' }).start()
+  let fileMap
+  try {
+    fileMap = await readRepo(cwd)
+    spinner.succeed(chalk.dim(`  Scanned ${Object.keys(fileMap).length} files`))
+  } catch (err) {
+    spinner.fail(chalk.red('  Failed to read repository'))
+    process.exit(1)
+  }
+
+  // 3. Analyze with security audit prompt
+  const analyzeSpinner = ora({ text: chalk.dim('  Running security audit...') }).start()
+  const code = bundleCode(fileMap)
+
+  let result
+  try {
+    const client = new Anthropic({ apiKey: config.anthropicKey })
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4096,
+      system: AUDIT_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: `Audit this codebase (repo: ${repoName}):\n\n${code}` }],
+    })
+
+    const raw = message.content[0].type === 'text' ? message.content[0].text : '{}'
+    try {
+      result = JSON.parse(raw)
+    } catch {
+      const match = raw.match(/\{[\s\S]*\}/)
+      result = match ? JSON.parse(match[0]) : null
+    }
+
+    analyzeSpinner.stop()
+  } catch (err) {
+    analyzeSpinner.fail(chalk.red('  Audit failed: ' + err.message))
+    process.exit(1)
+  }
+
+  if (!result || !result.grade) {
+    console.log(chalk.red('  Failed to parse audit results'))
+    process.exit(1)
+  }
+
+  // JSON output mode
+  if (json) {
+    console.log(JSON.stringify(result, null, 2))
+    process.exit(result.findings?.some(f => f.severity === 'critical') ? 1 : 0)
+  }
+
+  // 4. Display results
+  const findings = result.findings || []
+  const critical = findings.filter(f => f.severity === 'critical')
+  const warnings = findings.filter(f => f.severity === 'warning')
+  const infos = findings.filter(f => f.severity === 'info')
+
+  console.log()
+  divider()
+  console.log()
+
+  // Grade display
+  const gradeStr = gradeColor(result.grade)
+  console.log(chalk.bold('  SECURITY AUDIT REPORT'))
+  console.log()
+  console.log(`  Grade:  ${gradeStr}`)
+  console.log(`  Score:  ${scoreBar(result.score)}`)
+  console.log()
+  console.log(`  ${chalk.red(critical.length + ' critical')}  ${chalk.yellow(warnings.length + ' warnings')}  ${chalk.blue(infos.length + ' info')}`)
+  console.log()
+
+  if (result.summary) {
+    console.log(chalk.dim('  ' + result.summary))
+    console.log()
+  }
+
+  divider()
+
+  // Findings
+  if (findings.length > 0) {
+    console.log(chalk.bold('\n  FINDINGS\n'))
+
+    for (const f of findings) {
+      console.log(`  ${severityIcon(f.severity)} ${severityLabel(f.severity)}  ${chalk.dim(f.type || '')}`)
+      console.log(`    ${f.description}`)
+      if (f.file) {
+        console.log(chalk.dim(`    📁 ${f.file}${f.line ? `:${f.line}` : ''}`))
+      }
+      if (f.fix) {
+        console.log(chalk.green(`    💡 ${f.fix}`))
+      }
+      console.log()
+    }
+  } else {
+    console.log(chalk.green('\n  ✓ No security issues found!\n'))
+  }
+
+  divider()
+
+  // 5. Report to dashboard if configured
+  if (reportToWeb && config.cliToken) {
+    const reportSpinner = ora({ text: chalk.dim('  Reporting to dashboard...') }).start()
+    try {
+      const apiUrl = config.apiUrl || DEFAULT_API_URL
+      const res = await fetch(`${apiUrl}/api/cli/report`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${config.cliToken}`,
+        },
+        body: JSON.stringify({
+          repo_name: repoName,
+          issues_found: findings.length,
+          issues_fixed: 0,
+          issues: findings.map(f => ({
+            severity: f.severity,
+            type: f.type,
+            file: f.file,
+            line: f.line,
+            description: f.description,
+            fixed: false,
+          })),
+        }),
+      })
+      if (res.ok) {
+        reportSpinner.succeed(chalk.dim('  Reported to dashboard'))
+      } else {
+        reportSpinner.warn(chalk.dim('  Failed to report to dashboard'))
+      }
+    } catch {
+      reportSpinner.warn(chalk.dim('  Could not reach dashboard'))
+    }
+  }
+
+  console.log()
+  process.exit(critical.length > 0 ? 1 : 0)
+}
+
 // ─── CLI setup ─────────────────────────────────────────────────────────────────
 
 program
   .name('vibedeploy')
   .description('Ship vibe code without getting burned')
   .version(VERSION)
+
+program
+  .command('deploy', { isDefault: true })
+  .description('Analyze, fix, and deploy to Vercel')
   .option('--check', 'Check only — no fixes, no deploy')
   .option('--fix', 'Fix only — no deploy')
   .action(async (options) => {
     await runDeploy({
       checkOnly: options.check,
       fixOnly: options.fix,
+    })
+  })
+
+program
+  .command('audit')
+  .description('Run a security audit on your codebase')
+  .option('--json', 'Output results as JSON')
+  .option('--report', 'Report results to VibeDeploy dashboard')
+  .action(async (options) => {
+    await runAudit({
+      json: options.json,
+      reportToWeb: options.report,
     })
   })
 
