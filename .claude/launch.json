@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "autoPort": false,
+  "configurations": [
+    {
+      "name": "VibeDeploy Web (Next.js)",
+      "runtimeExecutable": "/opt/homebrew/bin/node",
+      "runtimeArgs": ["/Users/markkrasotin/Downloads/vibedeploy/node_modules/next/dist/bin/next", "dev"],
+      "cwd": "/Users/markkrasotin/Downloads/vibedeploy/apps/web",
+      "port": 3000
+    },
+    {
+      "name": "VibeDeploy CLI",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["index.js"],
+      "port": 0
+    }
+  ]
+}
