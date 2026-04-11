@@ -40,8 +40,38 @@ export async function GET(
     findings = data || []
   }
 
-  // Strip any internal fields before returning
+  // Fetch previous audit for the same repo (for comparison)
+  let previousAudit: any = null
+  if (audit.status === 'done') {
+    const { data: prev } = await supabaseAdmin
+      .from('audits')
+      .select('id, grade, score, status, created_at')
+      .eq('user_id', session.user.id)
+      .eq('repo_name', audit.repo_name)
+      .eq('status', 'done')
+      .lt('created_at', audit.created_at)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (prev) {
+      // Get previous findings count by severity
+      const { data: prevFindings } = await supabaseAdmin
+        .from('audit_findings')
+        .select('severity')
+        .eq('audit_id', prev.id)
+
+      previousAudit = {
+        ...prev,
+        criticalCount: prevFindings?.filter(f => f.severity === 'critical').length || 0,
+        warningCount: prevFindings?.filter(f => f.severity === 'warning').length || 0,
+        infoCount: prevFindings?.filter(f => f.severity === 'info').length || 0,
+      }
+    }
+  }
+
+  // Strip internal fields before returning
   const { user_id, ...safeAudit } = audit
 
-  return NextResponse.json({ audit: safeAudit, findings })
+  return NextResponse.json({ audit: safeAudit, findings, previousAudit })
 }
