@@ -5,7 +5,8 @@ import { useState } from 'react'
 import { Waves } from 'lucide-react'
 import Link from 'next/link'
 
-export default function SignInPage() {
+export default function SignUpPage() {
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -14,16 +15,38 @@ export default function SignInPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters')
+      return
+    }
+
     setLoading(true)
 
-    const res = await signIn('credentials', {
+    // 1. Create account
+    const res = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password }),
+    })
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      setError(data.error || 'Something went wrong')
+      setLoading(false)
+      return
+    }
+
+    // 2. Auto sign in
+    const signInRes = await signIn('credentials', {
       email,
       password,
       redirect: false,
     })
 
-    if (res?.error) {
-      setError('Invalid email or password')
+    if (signInRes?.error) {
+      setError('Account created but sign in failed. Try signing in manually.')
       setLoading(false)
     } else {
       window.location.href = '/dashboard'
@@ -46,14 +69,20 @@ export default function SignInPage() {
         {/* Card */}
         <div className="border border-border rounded-2xl bg-surface p-8">
           <div className="text-center mb-6">
-            <h1 className="text-xl font-semibold mb-1.5">Welcome back</h1>
+            <h1 className="text-xl font-semibold mb-1.5">Create account</h1>
             <p className="text-sm text-foreground-muted">
-              Sign in to your account
+              Start auditing your code for free
             </p>
           </div>
 
-          {/* Email/Password form */}
           <form onSubmit={handleSubmit} className="space-y-3 mb-4">
+            <input
+              type="text"
+              placeholder="Name (optional)"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm placeholder:text-foreground-subtle focus:outline-none focus:border-accent/50 transition-colors"
+            />
             <input
               type="email"
               placeholder="Email"
@@ -64,10 +93,11 @@ export default function SignInPage() {
             />
             <input
               type="password"
-              placeholder="Password"
+              placeholder="Password (min 8 characters)"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              minLength={8}
               className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm placeholder:text-foreground-subtle focus:outline-none focus:border-accent/50 transition-colors"
             />
 
@@ -80,7 +110,7 @@ export default function SignInPage() {
               disabled={loading}
               className="w-full bg-accent hover:bg-accent-hover text-white font-medium text-sm rounded-xl px-4 py-3 transition-colors disabled:opacity-50"
             >
-              {loading ? 'Signing in...' : 'Sign in'}
+              {loading ? 'Creating account...' : 'Create account'}
             </button>
           </form>
 
@@ -91,7 +121,6 @@ export default function SignInPage() {
             <div className="flex-1 h-px bg-border" />
           </div>
 
-          {/* GitHub */}
           <button
             onClick={() => signIn('github', { callbackUrl: '/dashboard' })}
             className="w-full flex items-center justify-center gap-2.5 bg-white text-black font-medium text-sm rounded-xl px-4 py-3 hover:bg-gray-100 transition-colors"
@@ -104,9 +133,9 @@ export default function SignInPage() {
         </div>
 
         <p className="text-center text-sm text-foreground-muted mt-6">
-          Don&apos;t have an account?{' '}
-          <Link href="/auth/signup" className="text-accent hover:underline">
-            Sign up
+          Already have an account?{' '}
+          <Link href="/auth/signin" className="text-accent hover:underline">
+            Sign in
           </Link>
         </p>
       </div>
