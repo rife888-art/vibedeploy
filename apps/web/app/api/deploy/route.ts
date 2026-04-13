@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { rateLimit } from '@/lib/rate-limit'
 
 // Trigger a Vercel redeployment via the Vercel REST API.
 // This endpoint is called by the CLI after applying fixes.
 // Requires a connected Vercel project (projectId) and a valid token.
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { success } = rateLimit(`deploy:${session.user.id}`, 5, 60 * 1000)
+  if (!success) {
+    return NextResponse.json({ error: 'Rate limit exceeded. Try again later.' }, { status: 429 })
   }
 
   let body: any

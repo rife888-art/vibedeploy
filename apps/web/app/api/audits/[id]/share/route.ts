@@ -12,6 +12,12 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // Validate UUID format
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (!uuidPattern.test(params.id)) {
+    return NextResponse.json({ error: 'Invalid audit ID format' }, { status: 400 })
+  }
+
   const { data: audit } = await supabaseAdmin
     .from('audits')
     .select('id, shared, user_id')

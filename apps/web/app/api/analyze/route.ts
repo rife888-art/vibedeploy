@@ -40,8 +40,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
   }
 
-  const { code, repoName } = await req.json()
-  if (!code) {
+  let body: any
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
+  const { code, repoName } = body
+  if (!code || typeof code !== 'string') {
     return NextResponse.json({ error: 'No code provided' }, { status: 400 })
   }
 
@@ -55,7 +62,7 @@ export async function POST(req: NextRequest) {
     messages: [
       {
         role: 'user',
-        content: `Analyze this codebase (repo: ${repoName || 'unknown'}):\n\n${truncated}`,
+        content: `Analyze this codebase (repo: ${typeof repoName === 'string' ? repoName.slice(0, 100) : 'unknown'}):\n\n${truncated}`,
       },
     ],
   })

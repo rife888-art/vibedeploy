@@ -246,16 +246,17 @@ async function runAudit(auditId: string, accessToken: string, repoName: string, 
       })
       .eq('id', auditId)
 
-    // Insert findings
-    if (parsed.findings && parsed.findings.length > 0) {
-      const findings = parsed.findings.map((f: any) => ({
+    // Insert findings with validation
+    if (Array.isArray(parsed.findings) && parsed.findings.length > 0) {
+      const validSeverities = ['critical', 'warning', 'info']
+      const findings = parsed.findings.slice(0, 15).map((f: any) => ({
         audit_id: auditId,
-        severity: f.severity || 'info',
-        type: f.type || 'unknown',
-        file: f.file || null,
-        line: f.line || null,
-        description: f.description || '',
-        fix: f.fix || null,
+        severity: validSeverities.includes(f.severity) ? f.severity : 'info',
+        type: typeof f.type === 'string' ? f.type.slice(0, 100) : 'unknown',
+        file: typeof f.file === 'string' ? f.file.slice(0, 500) : null,
+        line: typeof f.line === 'number' && f.line >= 0 ? Math.min(f.line, 999999) : null,
+        description: typeof f.description === 'string' ? f.description.slice(0, 2000) : '',
+        fix: typeof f.fix === 'string' ? f.fix.slice(0, 2000) : null,
       }))
 
       await supabaseAdmin.from('audit_findings').insert(findings)
