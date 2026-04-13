@@ -73,8 +73,12 @@ async function fetchRepoFiles(accessToken: string, repoName: string, branch: str
     if (ignoreDirs.some((dir: string) => item.path.includes(`${dir}/`))) return false
     // Validate file path: no directory traversal, no absolute paths
     if (item.path.includes('..') || item.path.startsWith('/') || item.path.includes('\\')) return false
+    // Prevent multiple consecutive dots (e.g. "foo...bar") and other edge cases
+    if (/\.{2,}/.test(item.path)) return false
     // Only allow safe characters in file paths
     if (!/^[a-zA-Z0-9._\-/]+$/.test(item.path)) return false
+    // Prevent paths that start/end with dots or have hidden dirs
+    if (item.path.split('/').some((seg: string) => seg.startsWith('.') && seg !== '.env')) return false
     return codeExtensions.some((ext: string) => item.path.endsWith(ext))
   })
 
@@ -261,8 +265,10 @@ async function runAudit(auditId: string, accessToken: string, repoName: string, 
 
       await supabaseAdmin.from('audit_findings').insert(findings)
     }
-  } catch {
-    // Don't log full error to avoid exposing sensitive data in console
+  } catch (err) {
+    // Log only safe error info — no tokens, keys, or user data
+    const safeMessage = err instanceof Error ? err.message.slice(0, 200) : 'Unknown error'
+    console.error(`[audit:${auditId}] Analysis failed: ${safeMessage.replace(/Bearer\s+\S+/gi, '[REDACTED]').replace(/vd_[a-f0-9]+/gi, '[REDACTED]')}`)
     await supabaseAdmin
       .from('audits')
       .update({ status: 'error', summary: 'An error occurred during analysis. Please try again.' })

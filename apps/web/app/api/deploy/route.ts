@@ -34,8 +34,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid projectId format' }, { status: 400 })
   }
 
-  // Validate Vercel token format (basic sanity check)
-  if (vercelToken.length < 10 || vercelToken.length > 200) {
+  // Validate Vercel token format (alphanumeric, must be reasonable length)
+  if (vercelToken.length < 10 || vercelToken.length > 200 || !/^[a-zA-Z0-9_\-]+$/.test(vercelToken)) {
     return NextResponse.json({ error: 'Invalid token format' }, { status: 400 })
   }
 

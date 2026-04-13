@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
 
   // Rate limit by token hash to avoid leaking token in rate-limit keys
   const tokenHash = crypto.createHash('sha256').update(apiKey).digest('hex').slice(0, 16)
-  const { success: withinLimit } = rateLimit(`cli:${tokenHash}`, 10, 60 * 1000)
+  const { success: withinLimit } = rateLimit(`cli:${tokenHash}`, 5, 60 * 1000)
   if (!withinLimit) {
     return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
   }
@@ -78,11 +78,11 @@ export async function POST(req: NextRequest) {
   if (deploy_url !== undefined && typeof deploy_url !== 'string') {
     return NextResponse.json({ error: 'Invalid deploy_url: must be a string' }, { status: 400 })
   }
-  if (issues_found !== undefined && typeof issues_found !== 'number') {
-    return NextResponse.json({ error: 'Invalid issues_found: must be a number' }, { status: 400 })
+  if (issues_found !== undefined && (typeof issues_found !== 'number' || !Number.isFinite(issues_found) || issues_found < 0 || issues_found > 10000)) {
+    return NextResponse.json({ error: 'Invalid issues_found: must be a number between 0 and 10000' }, { status: 400 })
   }
-  if (issues_fixed !== undefined && typeof issues_fixed !== 'number') {
-    return NextResponse.json({ error: 'Invalid issues_fixed: must be a number' }, { status: 400 })
+  if (issues_fixed !== undefined && (typeof issues_fixed !== 'number' || !Number.isFinite(issues_fixed) || issues_fixed < 0 || issues_fixed > 10000)) {
+    return NextResponse.json({ error: 'Invalid issues_fixed: must be a number between 0 and 10000' }, { status: 400 })
   }
   if (issues !== undefined && !Array.isArray(issues)) {
     return NextResponse.json({ error: 'Invalid issues: must be an array' }, { status: 400 })
