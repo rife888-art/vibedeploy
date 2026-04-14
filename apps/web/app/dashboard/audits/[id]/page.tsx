@@ -50,6 +50,7 @@ export default function AuditDetailPage() {
   const [loading, setLoading] = useState(true)
   const [sharing, setSharing] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [reportCopied, setReportCopied] = useState(false)
 
   useEffect(() => {
     let interval: NodeJS.Timeout
@@ -87,6 +88,34 @@ export default function AuditDetailPage() {
     navigator.clipboard.writeText(`${window.location.origin}/report/${audit.id}`)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  function copyReport() {
+    if (!audit || findings.length === 0) return
+
+    const lines: string[] = [
+      `# Security Audit Report: ${audit.repo_name}`,
+      `Grade: ${audit.grade} | Score: ${audit.score}/100`,
+      `Date: ${new Date(audit.created_at).toISOString().split('T')[0]}`,
+      `Critical: ${criticalCount} | Warnings: ${warningCount} | Info: ${infoCount}`,
+      '',
+      audit.summary || '',
+      '',
+      '## Findings',
+      '',
+    ]
+
+    findings.forEach((f, i) => {
+      lines.push(`### ${i + 1}. [${f.severity.toUpperCase()}] ${f.description}`)
+      if (f.file) lines.push(`File: ${f.file}${f.line ? `:${f.line}` : ''}`)
+      lines.push(`Type: ${f.type}`)
+      if (f.fix) lines.push(`Fix: ${f.fix}`)
+      lines.push('')
+    })
+
+    navigator.clipboard.writeText(lines.join('\n'))
+    setReportCopied(true)
+    setTimeout(() => setReportCopied(false), 3000)
   }
 
   const gradeColors: Record<string, string> = {
@@ -270,7 +299,7 @@ export default function AuditDetailPage() {
           </div>
         )}
 
-        {/* ── Feature 3: Share button ── */}
+        {/* ── Feature 3: Share & Copy report ── */}
         {isDone && (
           <div className="flex items-center gap-2 mt-4 pt-4 border-t border-border">
             <button
@@ -292,6 +321,23 @@ export default function AuditDetailPage() {
                 className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-surface-2 text-foreground-muted border border-border hover:border-accent/30 transition-colors"
               >
                 {copied ? <><Check className="w-3.5 h-3.5 text-green-400" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> Copy link</>}
+              </button>
+            )}
+            {findings.length > 0 && (
+              <button
+                onClick={copyReport}
+                className={cn(
+                  'inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ml-auto',
+                  reportCopied
+                    ? 'bg-green-400/10 text-green-400 border border-green-400/20'
+                    : 'bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20'
+                )}
+              >
+                {reportCopied ? (
+                  <><Check className="w-3.5 h-3.5" /> Report copied!</>
+                ) : (
+                  <><FileCode className="w-3.5 h-3.5" /> Copy for developer</>
+                )}
               </button>
             )}
           </div>
