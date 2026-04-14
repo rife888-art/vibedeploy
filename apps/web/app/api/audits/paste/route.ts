@@ -6,7 +6,7 @@ import { rateLimit } from '@/lib/rate-limit'
 import Anthropic from '@anthropic-ai/sdk'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514'
+const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || 'claude-opus-4-0-20250514'
 
 const AUDIT_PROMPT = `You are a security auditor for web applications. Analyze this codebase and return a JSON security audit report.
 
