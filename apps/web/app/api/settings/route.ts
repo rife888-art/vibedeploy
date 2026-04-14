@@ -38,17 +38,8 @@ function decrypt(text: string): string {
       decrypted += decipher.final('utf8')
       return decrypted
     }
-    if (parts.length === 2) {
-      // Legacy format: iv:encrypted (fixed salt)
-      const [ivHex, encrypted] = parts
-      const iv = Buffer.from(ivHex, 'hex')
-      const key = crypto.scryptSync(getEncryptionKey(), 'salt', 32)
-      const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv)
-      let decrypted = decipher.update(encrypted, 'hex', 'utf8')
-      decrypted += decipher.final('utf8')
-      return decrypted
-    }
-    return text // Not encrypted (legacy)
+    // Legacy 2-part format no longer supported — treat as plaintext
+    return text
   } catch {
     return text // Return as-is if decryption fails (legacy data)
   }

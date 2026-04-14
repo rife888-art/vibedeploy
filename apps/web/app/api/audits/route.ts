@@ -6,6 +6,7 @@ import { rateLimit } from '@/lib/rate-limit'
 import Anthropic from '@anthropic-ai/sdk'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514'
 
 const AUDIT_PROMPT = `You are a security auditor for web applications. Analyze this codebase and return a JSON security audit report.
 
@@ -210,7 +211,7 @@ async function runAudit(auditId: string, accessToken: string, repoName: string, 
 
     // Send to Claude for analysis
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: CLAUDE_MODEL,
       max_tokens: 4096,
       system: AUDIT_PROMPT,
       messages: [
@@ -266,9 +267,15 @@ async function runAudit(auditId: string, accessToken: string, repoName: string, 
       await supabaseAdmin.from('audit_findings').insert(findings)
     }
   } catch (err) {
-    // Log only safe error info — no tokens, keys, or user data
-    const safeMessage = err instanceof Error ? err.message.slice(0, 200) : 'Unknown error'
-    console.error(`[audit:${auditId}] Analysis failed: ${safeMessage.replace(/Bearer\s+\S+/gi, '[REDACTED]').replace(/vd_[a-f0-9]+/gi, '[REDACTED]')}`)
+    // Log only safe error info — redact all sensitive patterns
+    const rawMessage = err instanceof Error ? err.message.slice(0, 200) : 'Unknown error'
+    const safeMessage = rawMessage
+      .replace(/Bearer\s+\S+/gi, 'Bearer [REDACTED]')
+      .replace(/vd_[a-zA-Z0-9]+/gi, 'vd_[REDACTED]')
+      .replace(/sk-[a-zA-Z0-9\-_]+/gi, 'sk-[REDACTED]')
+      .replace(/ghp_[a-zA-Z0-9]+/gi, 'ghp_[REDACTED]')
+      .replace(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g, '[EMAIL]')
+    console.error(`[audit:${auditId}] Analysis failed: ${safeMessage}`)
     await supabaseAdmin
       .from('audits')
       .update({ status: 'error', summary: 'An error occurred during analysis. Please try again.' })

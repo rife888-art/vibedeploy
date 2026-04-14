@@ -6,6 +6,7 @@ import { rateLimit } from '@/lib/rate-limit'
 import Anthropic from '@anthropic-ai/sdk'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514'
 
 const AUDIT_PROMPT = `You are a security auditor for web applications. Analyze this codebase and return a JSON security audit report.
 
@@ -90,7 +91,7 @@ export async function POST(req: NextRequest) {
 async function runPasteAudit(auditId: string, code: string, name: string) {
   try {
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: CLAUDE_MODEL,
       max_tokens: 4096,
       system: AUDIT_PROMPT,
       messages: [

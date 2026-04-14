@@ -5,6 +5,7 @@ import { rateLimit } from '@/lib/rate-limit'
 import Anthropic from '@anthropic-ai/sdk'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
 
 const SYSTEM_PROMPT = `You are a production readiness checker for vibe-coded apps. Analyze this codebase and return JSON with:
 {
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
   const truncated = code.length > 80000 ? code.slice(0, 80000) + '\n\n[... truncated ...]' : code
 
   const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: CLAUDE_MODEL,
     max_tokens: 2048,
     system: SYSTEM_PROMPT,
     messages: [
