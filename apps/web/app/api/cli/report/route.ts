@@ -25,8 +25,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid API key format' }, { status: 401 })
   }
 
-  // Rate limit by token hash to avoid leaking token in rate-limit keys
-  const tokenHash = crypto.createHash('sha256').update(apiKey).digest('hex').slice(0, 16)
+  // Rate limit by HMAC of token to avoid leaking token in rate-limit keys
+  const hmacSecret = process.env.NEXTAUTH_SECRET || 'rate-limit-key'
+  const tokenHash = crypto.createHmac('sha256', hmacSecret).update(apiKey).digest('hex').slice(0, 16)
   const { success: withinLimit } = rateLimit(`cli:${tokenHash}`, 5, 60 * 1000)
   if (!withinLimit) {
     return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
@@ -87,9 +88,9 @@ export async function POST(req: NextRequest) {
   if (issues !== undefined && !Array.isArray(issues)) {
     return NextResponse.json({ error: 'Invalid issues: must be an array' }, { status: 400 })
   }
-  // Validate deploy_url format if provided
-  if (deploy_url && !/^https?:\/\/.+/.test(deploy_url)) {
-    return NextResponse.json({ error: 'Invalid deploy_url: must be a valid URL' }, { status: 400 })
+  // Validate deploy_url format — require HTTPS
+  if (deploy_url && !/^https:\/\/.+/.test(deploy_url)) {
+    return NextResponse.json({ error: 'Invalid deploy_url: must be a valid HTTPS URL' }, { status: 400 })
   }
 
   const sanitizedRepoName = repo_name ? String(repo_name).slice(0, 200) : null

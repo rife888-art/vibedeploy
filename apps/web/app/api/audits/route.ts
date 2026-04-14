@@ -66,7 +66,7 @@ async function fetchRepoFiles(accessToken: string, repoName: string, branch: str
   const tree = await treeRes.json()
 
   // Filter to code files only
-  const codeExtensions = ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.java', '.rb', '.php', '.vue', '.svelte', '.env', '.json', '.yaml', '.yml', '.toml', '.sql']
+  const codeExtensions = ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.java', '.rb', '.php', '.vue', '.svelte', '.json', '.yaml', '.yml', '.toml', '.sql']
   const ignoreDirs = ['node_modules', '.next', 'dist', 'build', '.git', 'vendor', '__pycache__']
 
   const codeFiles = tree.tree.filter((item: any) => {
@@ -78,8 +78,8 @@ async function fetchRepoFiles(accessToken: string, repoName: string, branch: str
     if (/\.{2,}/.test(item.path)) return false
     // Only allow safe characters in file paths
     if (!/^[a-zA-Z0-9._\-/]+$/.test(item.path)) return false
-    // Prevent paths that start/end with dots or have hidden dirs
-    if (item.path.split('/').some((seg: string) => seg.startsWith('.') && seg !== '.env')) return false
+    // Prevent all hidden files/dirs (including .env which may contain secrets)
+    if (item.path.split('/').some((seg: string) => seg.startsWith('.'))) return false
     return codeExtensions.some((ext: string) => item.path.endsWith(ext))
   })
 
@@ -267,15 +267,10 @@ async function runAudit(auditId: string, accessToken: string, repoName: string, 
       await supabaseAdmin.from('audit_findings').insert(findings)
     }
   } catch (err) {
-    // Log only safe error info — redact all sensitive patterns
-    const rawMessage = err instanceof Error ? err.message.slice(0, 200) : 'Unknown error'
-    const safeMessage = rawMessage
-      .replace(/Bearer\s+\S+/gi, 'Bearer [REDACTED]')
-      .replace(/vd_[a-zA-Z0-9]+/gi, 'vd_[REDACTED]')
-      .replace(/sk-[a-zA-Z0-9\-_]+/gi, 'sk-[REDACTED]')
-      .replace(/ghp_[a-zA-Z0-9]+/gi, 'ghp_[REDACTED]')
-      .replace(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g, '[EMAIL]')
-    console.error(`[audit:${auditId}] Analysis failed: ${safeMessage}`)
+    // Log only error type/code — never log message content which may contain sensitive data
+    const errorType = err instanceof Error ? err.constructor.name : 'UnknownError'
+    const errorCode = (err as any)?.status || (err as any)?.code || 'no-code'
+    console.error(`[audit:${auditId}] Analysis failed: ${errorType} (${errorCode})`)
     await supabaseAdmin
       .from('audits')
       .update({ status: 'error', summary: 'An error occurred during analysis. Please try again.' })

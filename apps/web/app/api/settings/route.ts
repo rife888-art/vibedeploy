@@ -25,24 +25,18 @@ function encrypt(text: string): string {
 }
 
 function decrypt(text: string): string {
-  try {
-    const parts = text.split(':')
-    if (parts.length === 3) {
-      // New format: salt:iv:encrypted
-      const [saltHex, ivHex, encrypted] = parts
-      const salt = Buffer.from(saltHex, 'hex')
-      const iv = Buffer.from(ivHex, 'hex')
-      const key = crypto.scryptSync(getEncryptionKey(), salt, 32)
-      const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv)
-      let decrypted = decipher.update(encrypted, 'hex', 'utf8')
-      decrypted += decipher.final('utf8')
-      return decrypted
-    }
-    // Legacy 2-part format no longer supported — treat as plaintext
-    return text
-  } catch {
-    return text // Return as-is if decryption fails (legacy data)
+  const parts = text.split(':')
+  if (parts.length !== 3) {
+    throw new Error('Invalid encrypted data format — only salt:iv:encrypted format is supported')
   }
+  const [saltHex, ivHex, encrypted] = parts
+  const salt = Buffer.from(saltHex, 'hex')
+  const iv = Buffer.from(ivHex, 'hex')
+  const key = crypto.scryptSync(getEncryptionKey(), salt, 32)
+  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv)
+  let decrypted = decipher.update(encrypted, 'hex', 'utf8')
+  decrypted += decipher.final('utf8')
+  return decrypted
 }
 
 export async function GET(req: NextRequest) {

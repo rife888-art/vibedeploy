@@ -50,8 +50,8 @@ export async function POST(req: NextRequest) {
   if (!repo_name || typeof repo_name !== 'string' || repo_name.length > 200) {
     return NextResponse.json({ error: 'Invalid repo_name' }, { status: 400 })
   }
-  if (deploy_url && (typeof deploy_url !== 'string' || deploy_url.length > 500)) {
-    return NextResponse.json({ error: 'Invalid deploy_url' }, { status: 400 })
+  if (deploy_url && (typeof deploy_url !== 'string' || deploy_url.length > 500 || !/^https:\/\/.+/.test(deploy_url))) {
+    return NextResponse.json({ error: 'Invalid deploy_url: must be a valid HTTPS URL' }, { status: 400 })
   }
 
   const safeIssuesFound = typeof issues_found === 'number' && issues_found >= 0 ? Math.min(issues_found, 10000) : 0
